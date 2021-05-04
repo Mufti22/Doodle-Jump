@@ -1,0 +1,314 @@
+
+
+unit MainUnit;
+
+interface
+
+uses
+  Windows, Messages, OpenGL, SysUtils, Variants, Classes, Controls, Forms,
+  Contnrs, Graphics, Dialogs, DGLUT,  Textures, StdCtrls, ExtCtrls, glForms,
+  UseStscr, FEGUI, Mesh, DirectSound, Menus, Math, DownloaderMaps, TexDraw;
+
+const
+//=========================настройки ====================
+SkyID =2;
+
+//==========================end==========================
+ GL_CLAMP_TO_EDGE =$812F;
+ GL_POLYGON_OFFSET_FILL  = $8037;
+
+  GL_DEPTH_COMPONENT16_ARB                           = $81A5;
+  GL_DEPTH_COMPONENT24_ARB                           = $81A6;
+  GL_DEPTH_COMPONENT32_ARB                           = $81A7;
+  GL_TEXTURE_DEPTH_SIZE_ARB                          = $884A;
+  GL_DEPTH_TEXTURE_MODE_ARB                          = $884B;
+  GL_TEXTURE_COMPARE_MODE_ARB                        = $884C;
+  GL_TEXTURE_COMPARE_FUNC_ARB                        = $884D;
+  GL_COMPARE_R_TO_TEXTURE_ARB                        = $884E;
+  GL_TEXTURE_COMPARE_FAIL_VALUE_ARB                  = $80BF;
+type
+  TMainForm = class(TGLForm)
+    Timer: TTimer;
+
+    procedure FormCreate(Sender: TObject);
+    procedure FormDestroy(Sender: TObject);
+    procedure FormPaint(Sender: TObject);
+    procedure TimerTimer(Sender: TObject);
+    procedure FormShow(Sender: TObject);
+  private
+
+    procedure DrawScene;
+  end;
+
+var
+   P:FPlayer;
+   Newton:real;
+   SX, SY, SZ, NewSP: real;
+   fogColor : array[0..3] of GLfloat = (0.18, 0.47, 0.75, 1); //цвет тумана
+   glLightPos: array[0..3] of glFloat = (-10,0,10,1);
+   glLightPos1: array[0..3] of glFloat = (10,30,5,1);
+
+   SpeddF, Cloud, DayPay, Sun:real;
+   HRC : HGLRC;
+   MouseMove1: boolean;
+   a: Glfloat = 0.001;
+   L: boolean;
+   X,Y,phi: single;
+   shin: single = 50;
+   SetH, SetW, Wat, M0D, Sky, Lev, Poi, Maps,
+   Sound, tHight, LibMap, Imap, Imaptex, DrawID: integer;
+
+   TempX1,TempY1,SingX,SingY,TempX2,TempY2,XT,YT : integer;
+   Point: Tpoint;
+   MainForm: TMainForm;
+
+ // var wi, h: integer;
+//////// текстуры//////////////////
+MapModelsPos:integer;
+  ModelPX,ModelPY,ModelPZ,RotX,RotY,RotZ,MScale: array[0..512] of real;
+  IDmodel : array[0..512] of Integer;
+  effects : array[0..10] of Integer;
+  Ttextobj : array[0..256] of Uint;
+  TPersons : array[0..256] of Uint;
+
+  MapObjLoad : array[0..512] of String;
+  MapTextLoad : array[0..512] of String;
+
+  Step : GLfloat = 1;
+  wrkStep : GLfloat = 1;
+  wrkTime : longint;
+  wrkX, wrkY : Integer;
+  TObjects : array[0..256] of TGLMultyMesh;
+  Persons : array[0..256] of TGLMultyMesh;
+  MyText : FTexDraws;
+
+
+implementation
+
+{$R *.dfm}
+procedure glGenTextures(n: GLsizei; textures: PGLuint); stdcall; external 'opengl32.dll';
+procedure glBindTexture(target: GLenum; texture: GLuint); stdcall; external 'opengl32.dll';
+procedure glCopyTexImage2D(target: GLenum; level: GLint;internalFormat: GLenum; x, y: GLint; width, height: GLsizei;border: GLint); stdcall; external 'opengl32.dll'
+procedure glCopyTexSubImage2D(target: GLenum; level, xoffset, yoffset, x, y: GLint; width, height: GLsizei); stdcall; external 'opengl32.dll';
+procedure glPolygonOffset(factor, units: GLfloat); stdcall;  external 'opengl32.dll';
+
+
+
+
+Procedure inGrass(px,pz,py:real; sx,sy,sz:real);
+  begin
+   if (p.x<px+1*sx*1.01) and  (p.x>px-1*sx*1.01) and (p.y<pz+1*sy*1.01) and
+       (p.y>pz-1*sy*1.01) and  (p.z<py+1*sz*1.01) and  (p.z>py-1*sz*1.01) then
+       begin
+        p.Check:=true;
+        if (p.Y<((pz+1*sy)-1)) then
+        begin
+          p.Y:=p.Y+1;
+        end;
+        //p.Y:=(pz+1*sy)-1;
+       end;
+   end;
+
+
+
+
+procedure TMainForm.DrawScene;
+begin
+   begin
+     glViewport(0, 0, ClientWidth, ClientHeight);
+     glMatrixMode ( GL_PROJECTION ); //переходим в матрицу проекции
+     glLoadIdentity;  //Сбрасываем текущую матрицу
+     gluPerspective(60,ClientWidth/ClientHeight,0.01,10000); //Область видимости
+     glMatrixMode ( GL_MODELVIEW ); //переходим в модельную матрицу
+     glLoadIdentity;//Сбрасываем текущую матрицу
+   end;
+if GetAsyncKeyState(VK_ESCAPE)<>0 then Close;
+If GetAsyncKeyState(VK_RBUTTON)<>0 then
+ begin
+    Mouse_Cam();
+ end;
+   If (Sun>250) then  Sun:=40;
+   p.Speed:=0.15;
+   Manege();
+//   NewTon:=0;
+if (p.Check <> true) then    NewTon:=NewTon-0.1;
+if (p.Check = true) then
+ begin
+   NewTon:= 0;
+    if GetAsyncKeyState(VK_Space)<>0 then
+     begin
+         p.Check:= false;
+         NewTon:= 2;
+     end;
+ end;
+ p.Check:=false;
+ p.y:=p.y+NewTon;
+begin
+ glPushMatrix;  // Очищаем буфер цвета и буфер глубины
+ Enable_Atest();  Enable_sun(); Fog(); glEnable(GL_FOG);
+ glClearColor(0.58, 0.58, 0.58, 1);
+ glClear(GL_COLOR_BUFFER_BIT or GL_DEPTH_BUFFER_BIT);
+
+//==================== Глаза игрока ===============================
+GluLookAt(P.X,P.Z,P.Y,P.X+sin(-p.AngleX/180*PI),P.Z+Cos(-p.AngleX/180*PI),P.Y+tan(p.AngleY/180*PI),0,0,1);
+
+//----------- Карта -----------------------------------------------------------------------
+glLightfv(GL_LIGHT0,GL_POSITION,@glLightPos);   //Позиция света (0,0,100)
+glLightfv(GL_LIGHT1,GL_POSITION,@glLightPos1);
+
+ ////////////////////////////////1///////////////////////////////////////////
+
+
+//  ModelPX,ModelPY,ModelPZ,RotX,RotY,RotZ,MScale:real;
+
+for DrawID := 0 to MapModelsPos - 1 do
+begin
+glTranslatef(ModelPX[DrawID],ModelPY[DrawID],ModelPZ[DrawID]);
+ glPushMatrix;
+  glBindTexture(GL_TEXTURE_2D,Ttextobj[IDmodel[DrawID]-1]);
+  glScalef(MScale[DrawID],MScale[DrawID],MScale[DrawID]);
+   TObjects[IDmodel[DrawID]-1].Draw;
+  glPopMatrix;
+glTranslatef(-ModelPX[DrawID],-ModelPY[DrawID],-ModelPZ[DrawID]);
+if (IDmodel[DrawID]-1)<>4 then
+begin
+ inGrass(ModelPX[DrawID],ModelPZ[DrawID],ModelPY[DrawID], MScale[DrawID],MScale[DrawID],MScale[DrawID]);
+end;
+if (IDmodel[DrawID]-1)=4 then
+begin
+ inGrass(ModelPX[DrawID],ModelPZ[DrawID],ModelPY[DrawID], MScale[DrawID],MScale[DrawID]/100,MScale[DrawID]);
+end;
+end;
+
+
+//////////////////////SKYBOX/////////////
+glTranslatef(P.X,P.Z,P.Y);
+
+  Disable_sun();
+  glDisable(GL_FOG);
+
+if SkyID = 1 then
+begin
+SkyBox(Sky1,Sky2,Sky3,Sky4,Sky5,Sky6,800);
+end
+else
+begin
+ SkySphere();
+end;
+  glPopMatrix;
+
+Disable_Atest();
+
+Cloud:=Cloud+0.005;
+Sun:=Sun+0.01;
+
+end;
+begin
+ glPushMatrix;  // Очищаем буфер цвета и буфер глубины
+ Enable_Atest();  Enable_sun(); Fog(); glEnable(GL_FOG);
+//----------- Карта -----------------------------------------------------------------------
+  MyText.Draw(50,50,50);
+
+
+  Disable_sun();
+  glDisable(GL_FOG);
+  glPopMatrix;
+
+Disable_Atest();
+
+
+end;
+  SwapBuffers(Canvas.Handle);
+
+end;
+
+
+
+
+procedure TMainForm.FormCreate(Sender: TObject);
+ begin
+  showCursor(true);
+  DownLoad();
+  Timer.Enabled := True;
+ end;
+procedure TMainForm.FormDestroy(Sender: TObject);
+ begin
+  for IMap := 0 to LibMap - 1 do
+     Begin
+         TObjects[IMap].Free;
+     end;
+ end;
+
+procedure TMainForm.FormPaint(Sender: TObject);
+begin
+  glEnable(GL_TEXTURE_2D);   //Включаем режим наложения текстур
+  glEnable(GL_ALPHA_TEST);     //Разрешаем альфа тест (прозрачность текстур)
+  glAlphaFunc(GL_GREATER,0.025);
+  glEnable (GL_BLEND);         //Включаем режим смешивания цветов
+  glBlendFunc (GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA) ; //Тип смешивания
+  glTexParameter (GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR); //Параметры наложения текстуры
+  glTexParameter (GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR); //Параметры наложения текстуры
+  glTexParameter (GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+  glTexParameter (GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+
+
+for IMap := 0 to Imaptex - 1 do
+   begin
+       LoadTexture(MapTextLoad[IMap],Ttextobj[IMap],false);
+   end;
+
+  LoadTexture('DATA\TEXTURES\Sky\Back.tga',Sky1,false);
+  LoadTexture('DATA\TEXTURES\Sky\bottom.tga',Sky2,false);
+  LoadTexture('DATA\TEXTURES\Sky\front.tga',Sky3,false);
+  LoadTexture('DATA\TEXTURES\Sky\left.tga',Sky4,false);
+  LoadTexture('DATA\TEXTURES\Sky\right.tga',Sky5,false);
+  LoadTexture('DATA\TEXTURES\Sky\top.tga',Sky6,false);
+
+
+  LoadTexture('DATA\Models\Map\Sky\Sky1.tga',Ttextobj[256],false);
+  LoadTexture('DATA\Models\Map\Sky\Sun.tga',Ttextobj[255],false);
+  LoadTexture('DATA\Models\Map\Sky\Sky.tga',Ttextobj[254],false);
+
+for IMap := 0 to LibMap - 1 do
+     begin
+         TObjects[IMap] := TGLMultyMesh.Create;
+         TObjects[IMap].LoadFromFile( MapObjLoad[IMap] );
+         TObjects[IMap].Extent := true;
+         TObjects[IMap].fSmooth := true; // Установить в фасеты
+     end;
+
+         TObjects[256] := TGLMultyMesh.Create;
+         TObjects[256].LoadFromFile('DATA\Models\Map\Sky\Sky.gms');
+         TObjects[256].Extent := true;
+         TObjects[256].fSmooth := true; // Установить в фасеты
+  //--------------------------------------------------------------------------------------------------
+  //MyText.Create;
+  MyText.LoadFont('resourse\Font\english.tga');
+  MyText.FText('Привет');
+
+
+  //------------ положение камеры ---------------------------------------------------------------------
+  DayPay:=10;
+  cloud:=0;
+  Sun:=40;
+  P.Z:=50;
+  P.X:=39;
+  P.Y:=34;
+  p.angleY:=-45;
+  p.angleX:=45;
+  showCursor(true);
+  DrawScene;
+end;
+
+
+procedure TMainForm.FormShow(Sender: TObject);
+begin
+  Resize;
+end;
+
+procedure TMainForm.TimerTimer(Sender: TObject);
+begin
+  DrawScene;
+end;
+
+end.

@@ -1,0 +1,32 @@
+object MainForm: TMainForm
+  Left = 1008
+  Top = 471
+  Width = 404
+  Height = 319
+  BiDiMode = bdLeftToRight
+  Caption = 'FireEngin'
+  Color = clBtnFace
+  DefaultMonitor = dmPrimary
+  DockSite = True
+  DragKind = dkDock
+  DragMode = dmAutomatic
+  Font.Charset = DEFAULT_CHARSET
+  Font.Color = clWindowText
+  Font.Height = -14
+  Font.Name = 'MS Sans Serif'
+  Font.Style = []
+  OldCreateOrder = False
+  ParentBiDiMode = False
+  WindowState = wsMaximized
+  OnCreate = FormCreate
+  OnDestroy = FormDestroy
+  OnPaint = FormPaint
+  OnShow = FormShow
+  PixelsPerInch = 120
+  TextHeight = 16
+  object Timer: TTimer
+    Interval = 1
+    OnTimer = TimerTimer
+    Top = 48
+  end
+end
